@@ -1,4 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:yamme/screen/checkout.dart';
+import 'package:yamme/services/category.dart';
+import 'package:yamme/services/product.dart';
 
 class Home extends StatefulWidget {
   const Home({super.key});
@@ -9,12 +12,73 @@ class Home extends StatefulWidget {
 
 class _HomeState extends State<Home> {
   int cartCount = 0;
+  int pageVisible = 0;
+  List<Map<String, dynamic>> orders = [];
+  List<Map<String, dynamic>> categories = [];
+  List<Map<String, dynamic>> products = [];
+  List<Map<String, dynamic>> filteredProducts = [];
+  final ProductService productService = ProductService();
+  final CategoryService categoryService = CategoryService();
+  @override
+  void initState() {
+    super.initState();
+    productService
+        .getProducts()
+        .then((data) {
+          setState(() {
+            products = data;
+            filteredProducts = List.from(products);
+          });
+        })
+        .catchError((error) {
+          print('Erro ao carregar produtos: $error');
+        });
+    categoryService
+        .getCategories()
+        .then((data) {
+          setState(() {
+            categories = data;
+          });
+        })
+        .catchError((error) {
+          print('Erro ao carregar categorias: $error');
+        });
+    setState(() {
+      pageVisible = 0;
+    });
+  }
+
+  void _onChildPressed() {
+    if (cartCount > 0) {
+      setState(() {
+        cartCount--;
+      });
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       body: Column(
         mainAxisAlignment: MainAxisAlignment.start,
-        children: [_header(), _body()],
+        children: [
+          _header(),
+          if (pageVisible == 0) _body(),
+          if (pageVisible == 1)
+            Expanded(
+              child: Checkout(data: orders, onPressed: _onChildPressed),
+            ),
+          if (pageVisible == 2) Expanded(child: _loadingScreen()),
+        ],
+      ),
+    );
+  }
+
+  Widget _loadingScreen() {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [CircularProgressIndicator()],
       ),
     );
   }
@@ -62,25 +126,30 @@ class _HomeState extends State<Home> {
     );
   }
 
-  _logo() {
-    return Image.asset(
-      'images/logo.png',
-      width: 50,
-      height: 50,
-      fit: BoxFit.contain,
-      filterQuality: FilterQuality.high,
+  Widget _logo() {
+    return MouseRegion(
+      cursor: SystemMouseCursors
+          .click, // muda o cursor para "click" quando estiver sobre a imagem
+      child: GestureDetector(
+        onTap: () {
+          setState(() {
+            pageVisible = 0;
+          });
+        },
+        child: Image.asset(
+          'images/logo.png',
+          width: 50,
+          height: 50,
+          fit: BoxFit.contain,
+          filterQuality: FilterQuality.high,
+        ),
+      ),
     );
   }
 
   _search() {
-    final List<String> options = [
-      'Casa',
-      'Apartamento',
-      'Terreno',
-      'Comercial',
-      'Aluguel',
-      'Venda',
-    ];
+    final List<String> options =
+        ['Todas'] + categories.map((cat) => cat['name'].toString()).toList();
 
     return SizedBox(
       width: 400,
@@ -114,7 +183,6 @@ class _HomeState extends State<Home> {
                     vertical: 0,
                     horizontal: 15,
                   ),
-                  // Sombras e hover
                   enabledBorder: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(20),
                     borderSide: BorderSide.none,
@@ -127,7 +195,15 @@ class _HomeState extends State<Home> {
               );
             },
         onSelected: (String selection) {
-          print('Selecionou: $selection');
+          setState(() {
+            if (selection == 'Todas') {
+              filteredProducts = List.from(products);
+            } else {
+              filteredProducts = products
+                  .where((prod) => prod['category']['name'] == selection)
+                  .toList();
+            }
+          });
         },
       ),
     );
@@ -148,7 +224,9 @@ class _HomeState extends State<Home> {
               Icons.shopping_cart_checkout_outlined,
               color: Colors.teal,
             ),
-            onPressed: () {},
+            onPressed: () {
+              _navegateToCheckout();
+            },
           ),
         ),
         if (cartCount > 0)
@@ -186,7 +264,7 @@ class _HomeState extends State<Home> {
     return Expanded(
       child: Container(
         width: double.infinity,
-        height: 600,
+        height: 700,
         margin: const EdgeInsets.all(20),
         decoration: BoxDecoration(
           color: Colors.white,
@@ -282,20 +360,19 @@ class _HomeState extends State<Home> {
             ),
           ),
           SizedBox(height: 20),
-          // Limitar a altura do GridView
           Expanded(
             child: Padding(
               padding: const EdgeInsets.all(20),
               child: GridView.builder(
                 gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                  crossAxisCount: 3,
-                  crossAxisSpacing: 20,
-                  mainAxisSpacing: 20,
+                  crossAxisCount: 4,
+                  crossAxisSpacing: 10,
+                  mainAxisSpacing: 10,
                   childAspectRatio: 3 / 4,
                 ),
-                itemCount: 6,
+                itemCount: filteredProducts.length,
                 itemBuilder: (context, index) {
-                  return _productCard(index);
+                  return _productCard(filteredProducts[index]);
                 },
               ),
             ),
@@ -305,7 +382,7 @@ class _HomeState extends State<Home> {
     );
   }
 
-  _productCard(int index) {
+  _productCard(Map<String, dynamic> product) {
     return Container(
       decoration: BoxDecoration(
         color: Colors.white,
@@ -328,7 +405,9 @@ class _HomeState extends State<Home> {
               topRight: Radius.circular(10),
             ),
             child: Image.asset(
-              'images/product.png',
+              productService.getImageForCategory(
+                product['category']?['name'],
+              ), // você pode trocar por uma URL vinda do back
               width: 150,
               height: 150,
               fit: BoxFit.contain,
@@ -341,29 +420,39 @@ class _HomeState extends State<Home> {
               crossAxisAlignment: CrossAxisAlignment.center,
               children: [
                 Text(
-                  'Limão Siciliano',
+                  product['name'], // nome do produto
                   style: const TextStyle(
                     fontSize: 20,
                     fontWeight: FontWeight.w800,
                   ),
                 ),
                 const SizedBox(height: 5),
-                const Text('6 unidades', style: TextStyle(color: Colors.grey)),
+                Text(
+                  product['category']?['name'] ??
+                      '', // mostra categoria se tiver
+                  style: const TextStyle(color: Colors.grey),
+                ),
                 const SizedBox(height: 10),
-
-                const Text(
-                  'R\$ 99,99',
-                  style: TextStyle(
+                Text(
+                  'R\$ ${product['price'].toStringAsFixed(2)}', // preço formatado
+                  style: const TextStyle(
                     fontSize: 26,
                     fontWeight: FontWeight.w900,
                     color: Color.fromARGB(255, 0, 51, 43),
                   ),
                 ),
                 IconButton(
-                  icon: Icon(Icons.add, size: 30, color: Colors.black),
+                  icon: const Icon(Icons.add, size: 30, color: Colors.black),
                   onPressed: () {
                     setState(() {
                       cartCount++;
+                      orders.add({
+                        'id': product['id'],
+                        'nome': product['name'],
+                        'quantidade': 1,
+                        'preco': product['price'],
+                        'category': product['category']?['name'],
+                      });
                     });
                   },
                 ),
@@ -373,5 +462,11 @@ class _HomeState extends State<Home> {
         ],
       ),
     );
+  }
+
+  void _navegateToCheckout() async {
+    setState(() {
+      pageVisible = 1;
+    });
   }
 }

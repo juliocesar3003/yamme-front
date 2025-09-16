@@ -9,15 +9,20 @@ class MyApp extends StatelessWidget {
   const MyApp({super.key});
 
   
+  @override
   Widget build(BuildContext context) {
     return MaterialApp(
       title: 'Yamme',
       theme: ThemeData(
         primarySwatch: Colors.teal,
       ),
-      home: const Home(),
+      home: Scaffold(
+      body: Home(),
+      
+    )
     );
   }
+
 }
 
 

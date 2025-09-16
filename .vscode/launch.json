@@ -1,0 +1,29 @@
+
+ {
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "yamme-front (web)",
+      "request": "launch",
+      "type": "dart",
+      "program": "lib/main.dart",
+      "deviceId": "chrome"
+    },
+    {
+      "name": "yamme-front (web profile mode)",
+      "request": "launch",
+      "type": "dart",
+      "flutterMode": "profile",
+      "program": "lib/main.dart",
+      "deviceId": "chrome"
+    },
+    {
+      "name": "yamme-front (web release mode)",
+      "request": "launch",
+      "type": "dart",
+      "flutterMode": "release",
+      "program": "lib/main.dart",
+      "deviceId": "chrome"
+    }
+  ]
+}
